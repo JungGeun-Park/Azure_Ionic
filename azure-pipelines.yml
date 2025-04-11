@@ -72,10 +72,6 @@ steps:
     displayName: 'Install CocoaPods'
 
   - script: |
-      xcode-select --install
-    displayName: 'Install Xcode CLI Tools'
-
-  - script: |
       chmod -R 755 ios/App
     displayName: 'Fix iOS Directory Permissions'
 
