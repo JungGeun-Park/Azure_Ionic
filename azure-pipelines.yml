@@ -72,41 +72,6 @@ steps:
     displayName: 'Install Dependencies'
 
   - script: |
-        echo "iOS 플랫폼 강제 재생성..."
-        rm -rf ios/App
-        ionic cap add ios
-        ionic cap sync ios --force
-
-        # Podfile 존재 확인
-        if [ ! -f "ios/App/Podfile" ]; then
-          echo "##vso[task.logissue type=error] Podfile not generated!"
-          exit 1
-        fi
-
-        echo "Podfile 생성 확인 완료."
-    displayName: 'Force iOS Platform Regeneration'
-
-  - script: |
-      export PATH="$PATH:/usr/local/bin"
-      echo "Node.js 버전: $(node -v)"
-      echo "npm 버전: $(npm -v)"
-    displayName: 'Node.js 확인'
-
-  - script: |
-      echo "CocoaPods 재설치..."
-      sudo gem uninstall cocoapods -a
-      sudo gem install cocoapods -v 1.12.1
-      pod setup
-    displayName: 'Reinstall CocoaPods'
-
-  - script: |
-      echo "Ionic CLI 설치..."
-      npm install -g @ionic/cli
-      echo "프로젝트 종속성 설치..."
-      npm ci
-    displayName: 'Install Dependencies'
-
-  - script: |
       echo "iOS 플랫폼 강제 재생성..."
       rm -rf ios/App
       ionic cap add ios
