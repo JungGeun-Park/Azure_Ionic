@@ -46,6 +46,11 @@ steps:
       security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
     displayName: 'Setup Temporary Keychain and Install Certificate'
 
+  - task: UseNode@1
+    inputs:
+      version: '18.x'
+    displayName: 'Install Node.js'
+
   - script: |
       echo "Installing dependencies..."
       npm ci
