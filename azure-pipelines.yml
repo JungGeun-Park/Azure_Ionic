@@ -143,6 +143,16 @@ steps:
     displayName: 'Extract Bundle ID from pbxproj File'
 
   - script: |
+      PBXPROJ_PATH="ios/App/App.xcodeproj/project.pbxproj"
+      
+      if [ ! -f "$PBXPROJ_PATH" ]; then
+        echo "##vso[task.logissue type=error] pbxproj file not found!"
+        exit 1
+      fi
+      
+      # Remove provisioning profile settings from Pods targets
+      sed -i '' '/PROVISIONING_PROFILE_SPECIFIER/d' "$PBXPROJ_PATH"
+
       cd ios/App
       EXPORT_DIR="$(Build.ArtifactStagingDirectory)"
       ARCHIVE_PATH="$EXPORT_DIR/${APP_NAME}.xcarchive"
