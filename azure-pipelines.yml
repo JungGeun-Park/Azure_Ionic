@@ -122,29 +122,25 @@ steps:
     displayName: 'Detect App Name'
 
   - script: |
-      echo "Extracting Bundle ID from Xcode build settings..."
+      echo "Extracting Bundle ID from pbxproj file..."
       
-      cd ios/App
+      PBXPROJ_PATH="ios/App/App.xcodeproj/project.pbxproj"
       
-      # Xcode 빌드 설정에서 PRODUCT_BUNDLE_IDENTIFIER 추출
-      BUNDLE_ID=$(xcodebuild -showBuildSettings \
-                -workspace "App.xcworkspace" \
-                -scheme "App" \
-                -configuration Release \
-                -sdk iphoneos 2>/dev/null | \
-                grep -E 'PRODUCT_BUNDLE_IDENTIFIER' | \
-                awk -F '= ' '{print $2}' | \
-                tr -d '"')
-      
-      if [ -z "$BUNDLE_ID" ]; then
-          echo "##vso[task.logissue type=error] Failed to extract Bundle ID!"
+      if [ -f "$PBXPROJ_PATH" ]; then
+          BUNDLE_ID=$(grep -A1 'PRODUCT_BUNDLE_IDENTIFIER' "$PBXPROJ_PATH" | grep -oE 'com\.[a-zA-Z0-9._-]+' | head -n 1)
+          
+          if [ -z "$BUNDLE_ID" ]; then
+              echo "##vso[task.logissue type=error] Failed to extract Bundle ID from pbxproj file!"
+              exit 1
+          fi
+          
+          echo "Extracted BUNDLE_ID: $BUNDLE_ID"
+          echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
+      else
+          echo "##vso[task.logissue type=error] pbxproj file not found at $PBXPROJ_PATH!"
           exit 1
       fi
-      
-      echo "Extracted BUNDLE_ID: $BUNDLE_ID"
-      echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
-    displayName: 'Extract Bundle ID from Xcode Build Settings'
-
+    displayName: 'Extract Bundle ID from pbxproj File'
 
   - script: |
       cd ios/App
