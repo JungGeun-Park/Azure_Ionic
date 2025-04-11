@@ -87,6 +87,48 @@ steps:
     displayName: 'CocoaPods 설치'
 
   - script: |
+      # Capacitor 설정 파일에서 appId 추출 (TypeScript/JSON 모두 지원)
+      CAPACITOR_CONFIG_TS="capacitor.config.ts"
+      CAPACITOR_CONFIG_JSON="capacitor.config.json"
+      
+      if [ -f "$CAPACITOR_CONFIG_TS" ]; then
+          echo "Using capacitor.config.ts"
+          BUNDLE_ID=$(grep -E "appId\s*:" "$CAPACITOR_CONFIG_TS" | awk -F"'" '{print $2}')
+      elif [ -f "$CAPACITOR_CONFIG_JSON" ]; then
+          echo "Using capacitor.config.json"
+          BUNDLE_ID=$(grep -E '"appId"\s*:' "$CAPACITOR_CONFIG_JSON" | awk -F'"' '{print $4}')
+      else
+          echo "##vso[task.logissue type=error] capacitor.config.ts/json not found!"
+          exit 1
+      fi
+
+      # 최종 검증
+      if [ -z "$BUNDLE_ID" ]; then
+          echo "##vso[task.logissue type=error] appId not found!"
+          exit 1
+      fi
+
+      echo "Extracted BUNDLE_ID: $BUNDLE_ID"
+      echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
+    displayName: 'Extract Bundle ID (Enhanced)'
+
+  - script: |
+      echo "Xcode 프로젝트 Bundle ID 확인..."
+      INFO_PLIST="ios/App/App/Info.plist"
+      if [ -f "$INFO_PLIST" ]; then
+          XCODE_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$INFO_PLIST")
+          echo "Xcode Bundle ID: $XCODE_BUNDLE_ID"
+          if [ "$XCODE_BUNDLE_ID" != "$BUNDLE_ID" ]; then
+              echo "##vso[task.logissue type=error] Bundle ID mismatch! Capacitor: $BUNDLE_ID vs Xcode: $XCODE_BUNDLE_ID"
+              exit 1
+          fi
+      else
+          echo "##vso[task.logissue type=error] Info.plist not found!"
+          exit 1
+      fi
+    displayName: 'Verify Xcode Bundle ID'
+    
+  - script: |
       IOS_PATH="ios/App"
       if [ -d "$IOS_PATH" ]; then
           APP_NAME=$(ls "$IOS_PATH" | grep ".xcodeproj" | sed 's/.xcodeproj//')
@@ -103,33 +145,7 @@ steps:
     displayName: 'Detect App Name'
 
   - script: |
-      # Capacitor 설정 파일 확인 (TS 우선, 없으면 JSON)
-      CAPACITOR_CONFIG_TS="capacitor.config.ts"
-      CAPACITOR_CONFIG_JSON="capacitor.config.json"
-      
-      if [ -f "$CAPACITOR_CONFIG_TS" ]; then
-          echo "Using capacitor.config.ts"
-          BUNDLE_ID=$(grep -E "appId:" "$CAPACITOR_CONFIG_TS" | cut -d"'" -f2)
-      elif [ -f "$CAPACITOR_CONFIG_JSON" ]; then
-          echo "Using capacitor.config.json"
-          BUNDLE_ID=$(grep -E '"appId":' "$CAPACITOR_CONFIG_JSON" | cut -d'"' -f4)
-      else
-          echo "##vso[task.logissue type=error] capacitor.config.ts/json not found!"
-          exit 1
-      fi
-
-      # 최종 검증
-      if [ -z "$BUNDLE_ID" ]; then
-          echo "##vso[task.logissue type=error] appId not found!"
-          exit 1
-      fi
-
-      echo "Extracted BUNDLE_ID: $BUNDLE_ID"
-      echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
-    displayName: 'Extract Bundle ID from Capacitor Config'
-
-  - script: |
-      cd platforms/ios
+      cd ios/App
       EXPORT_DIR="$(Build.ArtifactStagingDirectory)"
       ARCHIVE_PATH="$EXPORT_DIR/${APP_NAME}.xcarchive"
 
