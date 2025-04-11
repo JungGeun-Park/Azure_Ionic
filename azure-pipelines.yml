@@ -53,64 +53,39 @@ steps:
 
   - script: |
       export PATH="$PATH:/usr/local/bin"
-      echo "Node.js 버전: $(node -v)"
-      echo "npm 버전: $(npm -v)"
-    displayName: 'Verify Node.js Installation'
+      echo "Node.js: $(node -v)"
+      echo "npm: $(npm -v)"
+    displayName: 'Verify Node.js'
 
   - script: |
-      echo "Setting up Ruby environment without sudo..."
-      
-      # 사용자 홈 디렉토리에 Ruby 설치 경로 설정
-      mkdir -p $HOME/Vendor/ruby
-      
-      export GEM_HOME=$HOME/Vendor/ruby
-      export PATH=$HOME/Vendor/ruby/bin:$PATH
-      
-      echo "Installing CocoaPods..."
-      gem install cocoapods
-      
-      echo "Verifying CocoaPods installation..."
-      pod --version
-    displayName: 'Install CocoaPods Without Sudo'
-
-  - script: |
-      echo "Installing Ionic CLI..."
+      echo "Install Ionic CLI..."
       npm install -g @ionic/cli
-      
-      echo "Installing project dependencies..."
       npm ci
     displayName: 'Install Dependencies'
 
   - script: |
-      echo "Regenerating iOS platform..."
-      
-      rm -rf ios/App
-      ionic cap add ios
-      
-      echo "Syncing iOS platform..."
-      ionic cap sync ios --force
-      
-      # Podfile 존재 확인
-      if [ ! -f "ios/App/Podfile" ]; then
-        echo "##vso[task.logissue type=error] Podfile not generated!"
-        exit 1
-      fi
-
-      echo "Podfile 생성 확인 완료."
-    displayName: 'Sync iOS Platform'
+      echo "Install CocoaPods without sudo..."
+      export GEM_HOME="$HOME/.gem"
+      export PATH="$GEM_HOME/bin:$PATH"
+      gem install cocoapods --user-install
+      pod --version
+    displayName: 'Install CocoaPods'
 
   - script: |
-      echo "Installing CocoaPods dependencies..."
+      echo "Regenerate iOS platform..."
+      rm -rf ios/App
+      ionic cap add ios
+      ionic cap sync ios --force --verbose  # --verbose 추가
       
-      cd ios/App
-      pod install --no-repo-update
-      
-      if [ $? -ne 0 ]; then
-        echo "##vso[task.logissue type=error] CocoaPods installation failed!"
+      if [ ! -f "ios/App/Podfile" ]; then
+        echo "##vso[task.logissue type=error] Podfile still missing!"
         exit 1
       fi
+    displayName: 'Force iOS Regeneration'
 
-      echo "CocoaPods dependencies installed successfully."
+  - script: |
+      cd ios/App
+      pod install --repo-update
     displayName: 'Install Pods'
     
   - script: |
