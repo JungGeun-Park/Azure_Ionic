@@ -72,9 +72,17 @@ steps:
     displayName: 'Install CocoaPods'
 
   - script: |
+      xcode-select --install
+    displayName: 'Install Xcode CLI Tools'
+
+  - script: |
+      chmod -R 755 ios/App
+    displayName: 'Fix iOS Directory Permissions'
+
+  - script: |
       echo "Regenerate iOS platform..."
       rm -rf ios/App
-      ionic cap sync ios --force
+      ionic cap sync ios --force --verbose  # --verbose 추가
       
       if [ ! -f "ios/App/Podfile" ]; then
         echo "##vso[task.logissue type=error] Podfile still missing!"
@@ -86,7 +94,7 @@ steps:
       cd ios/App
       pod install --repo-update
     displayName: 'Install Pods'
-
+    
   - script: |
       IOS_PATH="ios/App"
       if [ -d "$IOS_PATH" ]; then
