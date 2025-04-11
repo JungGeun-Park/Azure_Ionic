@@ -46,24 +46,53 @@ steps:
       security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
     displayName: 'Setup Temporary Keychain and Install Certificate'
 
+  - task: UseNode@1
+    inputs:
+      version: '20.x'
+    displayName: 'Install Node.js 20'
+
   - script: |
-      echo "Installing dependencies..."
+      export PATH="$PATH:/usr/local/bin"
+      echo "Node.js 버전: $(node -v)"
+      echo "npm 버전: $(npm -v)"
+    displayName: 'Node.js 확인'
+
+  - script: |
+      echo "FFI gem 재설치..."
+      sudo gem uninstall ffi --all
+      sudo gem install ffi --platform=ruby
+      gem pristine ffi --version 1.16.3
+    displayName: 'FFI Gem 복구'
+
+  - script: |
+      echo "Ionic CLI 설치..."
+      npm install -g @ionic/cli
+      echo "프로젝트 종속성 설치..."
       npm ci
-      
-      echo "Building Ionic project..."
+    displayName: '종속성 설치'
+
+  - script: |
+      echo "Capacitor iOS 재설치..."
+      npm uninstall @capacitor/ios
+      npm install @capacitor/ios@latest
+      ionic cap sync ios --force
+    displayName: 'Capacitor iOS 재설치'
+
+  - script: |
+      echo "Ionic 프로젝트 빌드..."
       ionic build --prod
-      
-      echo "Copying web assets to iOS platform..."
+      echo "웹 에셋 복사..."
       ionic cap copy ios
-      
-      echo "Syncing iOS platform..."
       ionic cap sync ios
-      
-      echo "Installing CocoaPods dependencies..."
+    displayName: 'Ionic 빌드 및 동기화'
+
+  - script: |
+      echo "CocoaPods 설치..."
+      brew install cocoapods
       cd ios/App
       pod install
-    displayName: 'Prepare Ionic Project'
-
+    displayName: 'CocoaPods 설치'
+    
   - script: |
       IOS_PATH="platforms/ios"
       if [ -d "$IOS_PATH" ]; then
