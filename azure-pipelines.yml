@@ -46,96 +46,34 @@ steps:
       security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
     displayName: 'Setup Temporary Keychain and Install Certificate'
 
-  - task: UseNode@1
-    inputs:
-      version: '20.x'
-    displayName: 'Install Node.js 20'
+  - script: |
+        echo "iOS 플랫폼 강제 재생성..."
+        rm -rf ios/App
+        ionic cap add ios
+        ionic cap sync ios --force
+
+        # Podfile 존재 확인
+        if [ ! -f "ios/App/Podfile" ]; then
+          echo "##vso[task.logissue type=error] Podfile not generated!"
+          exit 1
+        fi
+
+        echo "Podfile 생성 확인 완료."
+    displayName: 'Force iOS Platform Regeneration'
 
   - script: |
-      export PATH="$PATH:/usr/local/bin"
-      echo "Node.js 버전: $(node -v)"
-      echo "npm 버전: $(npm -v)"
-    displayName: 'Node.js 확인'
-
-  - script: |
-      echo "Ionic CLI 설치..."
-      npm install -g @ionic/cli
-      echo "프로젝트 종속성 설치..."
-      npm ci
-    displayName: '종속성 설치'
-
-  - script: |
-      echo "Capacitor iOS 재설치..."
-      npm uninstall @capacitor/ios
-      npm install @capacitor/ios@latest
-      ionic cap sync ios --force
-    displayName: 'Capacitor iOS 재설치'
-
-  - script: |
-      echo "Ionic 프로젝트 빌드..."
-      ionic build --prod
-      echo "웹 에셋 복사..."
-      ionic cap copy ios
-      ionic cap sync ios
-    displayName: 'Ionic 빌드 및 동기화'
-
-  - script: |
-      echo "CocoaPods 설치..."
-      brew install cocoapods
+      echo "CocoaPods 설치 및 의존성 업데이트..."
       cd ios/App
       pod install
-    displayName: 'CocoaPods 설치'
 
-  - script: |
-      echo "강제 iOS 프로젝트 재생성..."
-      rm -rf ios/App
-      ionic cap add ios
-      ionic cap sync ios --force
-    displayName: 'Clean iOS Project Sync'
-
-  - script: |
-      npm install -g ts-node jq
-    displayName: 'Install Parsing Tools'
-
-  - script: |
-      CAPACITOR_CONFIG_TS="capacitor.config.ts"
-      CAPACITOR_CONFIG_JSON="capacitor.config.json"
-      
-      if [ -f "$CAPACITOR_CONFIG_TS" ]; then
-          echo "Using capacitor.config.ts"
-          BUNDLE_ID=$(node -e "console.log(require('ts-node').register({ transpileOnly: true }).compile(require('fs').readFileSync('$CAPACITOR_CONFIG_TS', 'utf8'), '$CAPACITOR_CONFIG_TS').appId)")
-      elif [ -f "$CAPACITOR_CONFIG_JSON" ]; then
-          echo "Using capacitor.config.json"
-          BUNDLE_ID=$(jq -r '.appId' "$CAPACITOR_CONFIG_JSON")
-      else
-          echo "##vso[task.logissue type=error] capacitor.config.ts/json not found!"
-          exit 1
+      # CocoaPods 성공 여부 확인
+      if [ $? -ne 0 ]; then
+        echo "##vso[task.logissue type=error] CocoaPods installation failed!"
+        exit 1
       fi
 
-      echo "Extracted BUNDLE_ID: $BUNDLE_ID"
-      echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
-    displayName: 'Extract Bundle ID (Precise)'
-
-  - script: |
-      plutil -replace CFBundleIdentifier -string "$BUNDLE_ID" ios/App/App/Info.plist
-      echo "Updated Info.plist CFBundleIdentifier: $(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" ios/App/App/Info.plist)"
-    displayName: 'Force Update Info.plist'
-
-  - script: |
-      echo "Xcode 프로젝트 Bundle ID 확인..."
-      INFO_PLIST="ios/App/App/Info.plist"
-      if [ -f "$INFO_PLIST" ]; then
-          XCODE_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$INFO_PLIST")
-          echo "Xcode Bundle ID: $XCODE_BUNDLE_ID"
-          if [ "$XCODE_BUNDLE_ID" != "$BUNDLE_ID" ]; then
-              echo "##vso[task.logissue type=error] Bundle ID mismatch! Capacitor: $BUNDLE_ID vs Xcode: $XCODE_BUNDLE_ID"
-              exit 1
-          fi
-      else
-          echo "##vso[task.logissue type=error] Info.plist not found!"
-          exit 1
-      fi
-    displayName: 'Verify Xcode Bundle ID'
+      echo "CocoaPods 설치 완료."
+    displayName: 'Install CocoaPods Dependencies'
 
   - script: |
       IOS_PATH="ios/App"
@@ -153,6 +91,32 @@ steps:
       echo "##vso[task.setvariable variable=APP_NAME]$APP_NAME"
     displayName: 'Detect App Name'
 
+  - script: |
+      # Capacitor 설정 파일 확인 (TS 우선, 없으면 JSON)
+      CAPACITOR_CONFIG_TS="capacitor.config.ts"
+      CAPACITOR_CONFIG_JSON="capacitor.config.json"
+      
+      if [ -f "$CAPACITOR_CONFIG_TS" ]; then
+          echo "Using capacitor.config.ts"
+          BUNDLE_ID=$(grep -E "appId\s*:" "$CAPACITOR_CONFIG_TS" | awk -F"'" '{print $2}')
+      elif [ -f "$CAPACITOR_CONFIG_JSON" ]; then
+          echo "Using capacitor.config.json"
+          BUNDLE_ID=$(grep -E '"appId"\s*:' "$CAPACITOR_CONFIG_JSON" | awk -F'"' '{print $4}')
+      else
+          echo "##vso[task.logissue type=error] capacitor.config.ts/json not found!"
+          exit 1
+      fi
+
+      # 최종 검증
+      if [ -z "$BUNDLE_ID" ]; then
+          echo "##vso[task.logissue type=error] appId not found!"
+          exit 1
+      fi
+
+      echo "Extracted BUNDLE_ID: $BUNDLE_ID"
+      echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
+    displayName: 'Extract Bundle ID from Capacitor Config'
+  
   - script: |
       cd ios/App
       EXPORT_DIR="$(Build.ArtifactStagingDirectory)"
