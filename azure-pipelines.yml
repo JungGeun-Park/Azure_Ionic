@@ -74,8 +74,7 @@ steps:
   - script: |
       echo "Regenerate iOS platform..."
       rm -rf ios/App
-      ionic cap add ios
-      ionic cap sync ios --force --verbose  # --verbose 추가
+      ionic cap sync ios --force
       
       if [ ! -f "ios/App/Podfile" ]; then
         echo "##vso[task.logissue type=error] Podfile still missing!"
@@ -87,7 +86,7 @@ steps:
       cd ios/App
       pod install --repo-update
     displayName: 'Install Pods'
-    
+
   - script: |
       IOS_PATH="ios/App"
       if [ -d "$IOS_PATH" ]; then
