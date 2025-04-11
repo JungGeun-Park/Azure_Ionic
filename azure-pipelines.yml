@@ -87,7 +87,7 @@ steps:
     displayName: 'CocoaPods 설치'
 
   - script: |
-      IOS_PATH="platforms/ios"
+      IOS_PATH="ios/App"
       if [ -d "$IOS_PATH" ]; then
           APP_NAME=$(ls "$IOS_PATH" | grep ".xcodeproj" | sed 's/.xcodeproj//')
           if [ -z "$APP_NAME" ]; then
