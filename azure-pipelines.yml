@@ -55,28 +55,41 @@ steps:
       export PATH="$PATH:/usr/local/bin"
       echo "Node.js 버전: $(node -v)"
       echo "npm 버전: $(npm -v)"
-    displayName: 'Node.js 확인'
-
-  # - script: |
-  #     echo "CocoaPods 재설치..."
-  #     sudo gem uninstall cocoapods -a
-  #     sudo gem install cocoapods -v 1.12.1
-  #     pod setup
-  #   displayName: 'Reinstall CocoaPods'
+    displayName: 'Verify Node.js Installation'
 
   - script: |
-      echo "Ionic CLI 설치..."
+      echo "Setting up Ruby environment without sudo..."
+      
+      # 사용자 홈 디렉토리에 Ruby 설치 경로 설정
+      mkdir -p $HOME/Vendor/ruby
+      
+      export GEM_HOME=$HOME/Vendor/ruby
+      export PATH=$HOME/Vendor/ruby/bin:$PATH
+      
+      echo "Installing CocoaPods..."
+      gem install cocoapods
+      
+      echo "Verifying CocoaPods installation..."
+      pod --version
+    displayName: 'Install CocoaPods Without Sudo'
+
+  - script: |
+      echo "Installing Ionic CLI..."
       npm install -g @ionic/cli
-      echo "프로젝트 종속성 설치..."
+      
+      echo "Installing project dependencies..."
       npm ci
     displayName: 'Install Dependencies'
 
   - script: |
-      echo "iOS 플랫폼 강제 재생성..."
+      echo "Regenerating iOS platform..."
+      
       rm -rf ios/App
       ionic cap add ios
+      
+      echo "Syncing iOS platform..."
       ionic cap sync ios --force
-
+      
       # Podfile 존재 확인
       if [ ! -f "ios/App/Podfile" ]; then
         echo "##vso[task.logissue type=error] Podfile not generated!"
@@ -84,22 +97,22 @@ steps:
       fi
 
       echo "Podfile 생성 확인 완료."
-    displayName: 'Force iOS Platform Regeneration'
+    displayName: 'Sync iOS Platform'
 
   - script: |
-      echo "CocoaPods 설치 및 의존성 업데이트..."
+      echo "Installing CocoaPods dependencies..."
+      
       cd ios/App
-      pod install
-
-      # CocoaPods 성공 여부 확인
+      pod install --no-repo-update
+      
       if [ $? -ne 0 ]; then
         echo "##vso[task.logissue type=error] CocoaPods installation failed!"
         exit 1
       fi
 
-      echo "CocoaPods 설치 완료."
-    displayName: 'Install CocoaPods Dependencies'
-
+      echo "CocoaPods dependencies installed successfully."
+    displayName: 'Install Pods'
+    
   - script: |
       IOS_PATH="ios/App"
       if [ -d "$IOS_PATH" ]; then
