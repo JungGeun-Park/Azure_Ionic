@@ -58,13 +58,6 @@ steps:
     displayName: 'Node.js 확인'
 
   - script: |
-      echo "FFI gem 재설치..."
-      sudo gem uninstall ffi --all
-      sudo gem install ffi --platform=ruby
-      gem pristine ffi --version 1.16.3
-    displayName: 'FFI Gem 복구'
-
-  - script: |
       echo "Ionic CLI 설치..."
       npm install -g @ionic/cli
       echo "프로젝트 종속성 설치..."
@@ -92,7 +85,7 @@ steps:
       cd ios/App
       pod install
     displayName: 'CocoaPods 설치'
-    
+
   - script: |
       IOS_PATH="platforms/ios"
       if [ -d "$IOS_PATH" ]; then
