@@ -46,12 +46,23 @@ steps:
       security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
     displayName: 'Setup Temporary Keychain and Install Certificate'
 
-  - task: UseNode@1
-    inputs:
-      version: '20.x'
-    displayName: 'Install Node.js 20'
+  - script: |
+        echo "iOS 플랫폼 강제 재생성..."
+        rm -rf ios/App
+        ionic cap add ios
+        ionic cap sync ios --force
+
+        # Podfile 존재 확인
+        if [ ! -f "ios/App/Podfile" ]; then
+          echo "##vso[task.logissue type=error] Podfile not generated!"
+          exit 1
+        fi
+
+        echo "Podfile 생성 확인 완료."
+    displayName: 'Force iOS Platform Regeneration'
 
   - script: |
+<<<<<<< HEAD
       export PATH="$PATH:/usr/local/bin"
       echo "Node.js 버전: $(node -v)"
       echo "npm 버전: $(npm -v)"
@@ -83,6 +94,18 @@ steps:
         exit 1
       fi
 
+=======
+      echo "CocoaPods 설치 및 의존성 업데이트..."
+      cd ios/App
+      pod install
+
+      # CocoaPods 성공 여부 확인
+      if [ $? -ne 0 ]; then
+        echo "##vso[task.logissue type=error] CocoaPods installation failed!"
+        exit 1
+      fi
+
+>>>>>>> 233c0ac547f2d6a9f7cb9d2fe3ebc9d911c2ce77
       echo "CocoaPods 설치 완료."
     displayName: 'Install CocoaPods Dependencies'
 
@@ -127,7 +150,11 @@ steps:
       echo "Extracted BUNDLE_ID: $BUNDLE_ID"
       echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
     displayName: 'Extract Bundle ID from Capacitor Config'
+<<<<<<< HEAD
     
+=======
+  
+>>>>>>> 233c0ac547f2d6a9f7cb9d2fe3ebc9d911c2ce77
   - script: |
       cd ios/App
       EXPORT_DIR="$(Build.ArtifactStagingDirectory)"
