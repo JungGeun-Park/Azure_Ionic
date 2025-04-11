@@ -1,0 +1,178 @@
+trigger:
+- main
+
+pool:
+  name: APPSEALING
+
+parameters:
+- name: APPLE_ID
+  type: string
+  default: 'puzznic@inka.co.kr'
+- name: APP_SPECIFIC_PASSWORD
+  type: string
+  default: 'qbrz-hmfz-robj-eohm'
+- name: TEAM_ID
+  type: string
+  default: '22X77ENQ2H'
+- name: PROVISIONING_PROFILE_NAME
+  type: string
+  default: 'AppSealing Wildcard Distribution Profile'
+
+steps:
+  - script: |
+      # Define paths for provisioning profile and keychain setup
+      P12_CERT_PATH="$(Build.SourcesDirectory)/platforms/ios/distribution.p12"
+      PROVISIONING_PROFILE_PATH="$(Build.SourcesDirectory)/platforms/ios/profile.mobileprovision"
+      KEYCHAIN_PATH="$HOME/Library/Keychains/temp-keychain.keychain-db"
+      KEYCHAIN_PASSWORD="temp123"
+
+      # Create a temporary keychain for code signing
+      if security list-keychains | grep -q "temp-keychain.keychain-db"; then
+          echo "Deleting existing temporary keychain..."
+          security delete-keychain "$KEYCHAIN_PATH"
+      fi
+
+      echo "Creating temporary keychain..."
+      security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      echo "Setting temporary keychain as default..."
+      security list-keychains -d user -s "$KEYCHAIN_PATH"
+      security default-keychain -s "$KEYCHAIN_PATH"
+      security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+      security set-keychain-settings -lut 3600 "$KEYCHAIN_PATH"
+
+      echo "Importing distribution certificate (PKCS#12) into temporary keychain..."
+      security import "$P12_CERT_PATH" -k "$KEYCHAIN_PATH" -P "123456" -T /usr/bin/codesign
+      security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+    displayName: 'Setup Temporary Keychain and Install Certificate'
+
+  - task: UseNode@1
+    inputs:
+      version: '18.x'
+    displayName: 'Install Node.js'
+
+  - script: |
+      # Automatically detect the app name from the platforms/ios directory
+      IOS_PATH="platforms/ios"
+      if [ -d "$IOS_PATH" ]; then
+          APP_NAME=$(ls "$IOS_PATH" | grep ".xcodeproj" | sed 's/.xcodeproj//')
+          if [ -z "$APP_NAME" ]; then
+              echo "No Xcode project found in the platforms/ios directory."
+              exit 1
+          fi
+      else
+          echo "platforms/ios directory not found."
+          exit 1
+      fi
+
+      echo "Detected app name: $APP_NAME"
+      echo "##vso[task.setvariable variable=APP_NAME]$APP_NAME"
+    displayName: 'Detect App Name'
+
+  - script: |
+      # Extract BUNDLE_ID from Cordova config.xml
+      CONFIG_XML_PATH="config.xml"
+      if [ -f "$CONFIG_XML_PATH" ]; then
+          BUNDLE_ID=$(grep -oE 'id="[^"]+"' "$CONFIG_XML_PATH" | cut -d'"' -f2)
+          echo "Extracted BUNDLE_ID from config.xml: $BUNDLE_ID"
+      else
+          echo "##vso[task.logissue type=error] config.xml not found!"
+          exit 1
+      fi
+
+      echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
+    displayName: 'Extract Bundle ID from Cordova Config'
+
+  - script: |
+      cd platforms/ios
+      EXPORT_DIR="$(Build.ArtifactStagingDirectory)"
+      ARCHIVE_PATH="$EXPORT_DIR/${APP_NAME}.xcarchive"
+
+      echo "Exporting .ipa..."
+      xcodebuild clean archive \
+        -workspace "${APP_NAME}.xcworkspace" \
+        -scheme "${APP_NAME}" \
+        -sdk iphoneos \
+        -configuration Release \
+        CODE_SIGN_IDENTITY="Apple Distribution" \
+        CODE_SIGN_STYLE="Manual" \
+        DEVELOPMENT_TEAM="${{ parameters.TEAM_ID }}" \
+        PROVISIONING_PROFILE_SPECIFIER="${{ parameters.PROVISIONING_PROFILE_NAME }}" \
+        SWIFT_OBJC_BRIDGING_HEADER="Azure_RN078-Bridging-Header.h" \
+        -archivePath "$ARCHIVE_PATH"
+
+    displayName: 'Archive iOS App'
+
+  - script: |
+      EXPORT_DIR="$(Build.ArtifactStagingDirectory)"
+      
+      cat << EOF > "$EXPORT_DIR/ExportOptions.plist"
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0">
+        <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>${{ parameters.TEAM_ID }}</string>
+            <key>provisioningProfiles</key>
+            <dict>
+                <key>$BUNDLE_ID</key>
+                <string>${{ parameters.PROVISIONING_PROFILE_NAME }}</string>
+            </dict>
+        </dict>
+      </plist>
+      EOF
+
+      cat "$EXPORT_DIR/ExportOptions.plist"
+    displayName: 'Generate ExportOptions.plist'
+
+  - script: |
+      EXPORT_DIR="$(Build.ArtifactStagingDirectory)"
+      
+      xcodebuild -exportArchive \
+        -archivePath "$(Build.ArtifactStagingDirectory)/${APP_NAME}.xcarchive" \
+        -exportOptionsPlist "$EXPORT_DIR/ExportOptions.plist" \
+        -exportPath "$EXPORT_DIR"
+
+    displayName: 'Export IPA'
+
+  - script: |
+      # Grant execution permission to generate_hash script
+      HASH_SCRIPT_PATH="$(Build.SourcesDirectory)/platforms/ios/AppSealingSDK/Tools/generate_hash"
+      IPA_PATH=$(find "$(Build.ArtifactStagingDirectory)" -type f -name "*.ipa" | head -n 1)
+
+      echo "Granting execution permission to generate_hash..."
+      chmod +x "$HASH_SCRIPT_PATH"
+
+      echo "Running generate_hash with IPA... $IPA_PATH"
+      "$HASH_SCRIPT_PATH" "$IPA_PATH"
+    displayName: 'Run generate_hash on IPA'
+
+  - script: |
+      IPA_PATH=$(find "$(Build.ArtifactStagingDirectory)" -type f -name "*.ipa" | head -n 1)
+
+      if [ ! -f "$IPA_PATH" ]; then
+          echo "IPA file not found. Skipping upload."
+          exit 1
+      fi
+
+      xcrun altool --upload-app \
+        --file "$IPA_PATH" \
+        --type ios \
+        --username "${{ parameters.APPLE_ID }}" \
+        --password "${{ parameters.APP_SPECIFIC_PASSWORD }}"
+      
+    displayName: 'Upload to TestFlight'
+
+  - script: |
+      TEMP_KEYCHAIN_PATH="$HOME/Library/Keychains/temp-keychain.keychain-db"
+
+      if [ -f "$TEMP_KEYCHAIN_PATH" ]; then
+          security delete-keychain "$TEMP_KEYCHAIN_PATH"
+          echo "Temporary keychain deleted successfully."
+      else
+          echo "Temporary keychain not found. Skipping deletion."
+      fi
+
+    displayName: 'Cleanup Temporary Files'

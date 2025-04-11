@@ -1,0 +1,11 @@
+{
+	"appId": "io.ionic.starter",
+	"appName": "Azure_Ionic",
+	"webDir": "www",
+	"packageClassList": [
+		"AppPlugin",
+		"HapticsPlugin",
+		"KeyboardPlugin",
+		"StatusBarPlugin"
+	]
+}
