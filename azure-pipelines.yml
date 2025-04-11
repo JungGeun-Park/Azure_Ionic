@@ -103,16 +103,30 @@ steps:
     displayName: 'Detect App Name'
 
   - script: |
-      CONFIG_XML_PATH="config.xml"
-      if [ -f "$CONFIG_XML_PATH" ]; then
-          BUNDLE_ID=$(grep -oE 'id="[^"]+"' "$CONFIG_XML_PATH" | cut -d'"' -f2)
-          echo "Extracted BUNDLE_ID: $BUNDLE_ID"
+      # Capacitor 설정 파일 확인 (TS 우선, 없으면 JSON)
+      CAPACITOR_CONFIG_TS="capacitor.config.ts"
+      CAPACITOR_CONFIG_JSON="capacitor.config.json"
+      
+      if [ -f "$CAPACITOR_CONFIG_TS" ]; then
+          echo "Using capacitor.config.ts"
+          BUNDLE_ID=$(grep -E "appId:" "$CAPACITOR_CONFIG_TS" | cut -d"'" -f2)
+      elif [ -f "$CAPACITOR_CONFIG_JSON" ]; then
+          echo "Using capacitor.config.json"
+          BUNDLE_ID=$(grep -E '"appId":' "$CAPACITOR_CONFIG_JSON" | cut -d'"' -f4)
       else
-          echo "##vso[task.logissue type=error] config.xml not found!"
+          echo "##vso[task.logissue type=error] capacitor.config.ts/json not found!"
           exit 1
       fi
+
+      # 최종 검증
+      if [ -z "$BUNDLE_ID" ]; then
+          echo "##vso[task.logissue type=error] appId not found!"
+          exit 1
+      fi
+
+      echo "Extracted BUNDLE_ID: $BUNDLE_ID"
       echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
-    displayName: 'Extract Bundle ID'
+    displayName: 'Extract Bundle ID from Capacitor Config'
 
   - script: |
       cd platforms/ios
