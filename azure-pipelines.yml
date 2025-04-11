@@ -122,30 +122,25 @@ steps:
     displayName: 'Detect App Name'
 
   - script: |
-      # Capacitor 설정 파일 확인 (TS 우선, 없으면 JSON)
-      CAPACITOR_CONFIG_TS="capacitor.config.ts"
-      CAPACITOR_CONFIG_JSON="capacitor.config.json"
+      echo "Extracting Bundle ID from Info.plist..."
       
-      if [ -f "$CAPACITOR_CONFIG_TS" ]; then
-          echo "Using capacitor.config.ts"
-          BUNDLE_ID=$(grep -E "appId\s*:" "$CAPACITOR_CONFIG_TS" | awk -F"'" '{print $2}')
-      elif [ -f "$CAPACITOR_CONFIG_JSON" ]; then
-          echo "Using capacitor.config.json"
-          BUNDLE_ID=$(grep -E '"appId"\s*:' "$CAPACITOR_CONFIG_JSON" | awk -F'"' '{print $4}')
+      INFO_PLIST_PATH="ios/App/App/Info.plist"
+      
+      if [ -f "$INFO_PLIST_PATH" ]; then
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$INFO_PLIST_PATH")
+          
+          if [ -z "$BUNDLE_ID" ]; then
+              echo "##vso[task.logissue type=error] Failed to extract Bundle ID from Info.plist!"
+              exit 1
+          fi
+          
+          echo "Extracted BUNDLE_ID: $BUNDLE_ID"
+          echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
       else
-          echo "##vso[task.logissue type=error] capacitor.config.ts/json not found!"
+          echo "##vso[task.logissue type=error] Info.plist not found at $INFO_PLIST_PATH!"
           exit 1
       fi
-
-      # 최종 검증
-      if [ -z "$BUNDLE_ID" ]; then
-          echo "##vso[task.logissue type=error] appId not found!"
-          exit 1
-      fi
-
-      echo "Extracted BUNDLE_ID: $BUNDLE_ID"
-      echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
-    displayName: 'Extract Bundle ID from Capacitor Config'
+    displayName: 'Extract Bundle ID from Info.plist'
 
   - script: |
       cd ios/App
