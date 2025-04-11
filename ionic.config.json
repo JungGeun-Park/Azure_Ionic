@@ -1,0 +1,7 @@
+{
+  "name": "Azure_Ionic",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular"
+}
