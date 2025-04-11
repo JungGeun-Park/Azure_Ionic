@@ -87,30 +87,39 @@ steps:
     displayName: 'CocoaPods 설치'
 
   - script: |
-      # Capacitor 설정 파일에서 appId 추출 (TypeScript/JSON 모두 지원)
+      echo "강제 iOS 프로젝트 재생성..."
+      rm -rf ios/App
+      ionic cap add ios
+      ionic cap sync ios --force
+    displayName: 'Clean iOS Project Sync'
+
+  - script: |
+      npm install -g ts-node jq
+    displayName: 'Install Parsing Tools'
+
+  - script: |
       CAPACITOR_CONFIG_TS="capacitor.config.ts"
       CAPACITOR_CONFIG_JSON="capacitor.config.json"
       
       if [ -f "$CAPACITOR_CONFIG_TS" ]; then
           echo "Using capacitor.config.ts"
-          BUNDLE_ID=$(grep -E "appId\s*:" "$CAPACITOR_CONFIG_TS" | awk -F"'" '{print $2}')
+          BUNDLE_ID=$(node -e "console.log(require('ts-node').register({ transpileOnly: true }).compile(require('fs').readFileSync('$CAPACITOR_CONFIG_TS', 'utf8'), '$CAPACITOR_CONFIG_TS').appId)")
       elif [ -f "$CAPACITOR_CONFIG_JSON" ]; then
           echo "Using capacitor.config.json"
-          BUNDLE_ID=$(grep -E '"appId"\s*:' "$CAPACITOR_CONFIG_JSON" | awk -F'"' '{print $4}')
+          BUNDLE_ID=$(jq -r '.appId' "$CAPACITOR_CONFIG_JSON")
       else
           echo "##vso[task.logissue type=error] capacitor.config.ts/json not found!"
           exit 1
       fi
 
-      # 최종 검증
-      if [ -z "$BUNDLE_ID" ]; then
-          echo "##vso[task.logissue type=error] appId not found!"
-          exit 1
-      fi
-
       echo "Extracted BUNDLE_ID: $BUNDLE_ID"
       echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
-    displayName: 'Extract Bundle ID (Enhanced)'
+    displayName: 'Extract Bundle ID (Precise)'
+
+  - script: |
+      plutil -replace CFBundleIdentifier -string "$BUNDLE_ID" ios/App/App/Info.plist
+      echo "Updated Info.plist CFBundleIdentifier: $(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" ios/App/App/Info.plist)"
+    displayName: 'Force Update Info.plist'
 
   - script: |
       echo "Xcode 프로젝트 Bundle ID 확인..."
@@ -127,7 +136,7 @@ steps:
           exit 1
       fi
     displayName: 'Verify Xcode Bundle ID'
-    
+
   - script: |
       IOS_PATH="ios/App"
       if [ -d "$IOS_PATH" ]; then
