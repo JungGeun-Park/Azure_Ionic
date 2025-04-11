@@ -53,54 +53,56 @@ steps:
 
   - script: |
       export PATH="$PATH:/usr/local/bin"
-      echo "Node.js version: $(node -v)"
-      echo "npm version: $(npm -v)"
-    displayName: 'Verify Node.js Installation'
+      echo "Node.js: $(node -v)"
+      echo "npm: $(npm -v)"
+    displayName: 'Verify Node.js'
 
   - script: |
-      echo "Installing Ionic CLI..."
+      echo "Install Ionic CLI..."
       npm install -g @ionic/cli
-      
-      echo "Installing project dependencies..."
       npm ci
     displayName: 'Install Dependencies'
 
   - script: |
-      echo "Regenerating iOS platform..."
-      rm -rf ios/App
+      echo "Install CocoaPods without sudo..."
+      export GEM_HOME="$HOME/.gem"
+      export PATH="$GEM_HOME/bin:$PATH"
+      gem install cocoapods --user-install
+      pod --version
+    displayName: 'Install CocoaPods'
+
+  - script: |
+      chmod -R 755 ios/App
+    displayName: 'Fix iOS Directory Permissions'
+
+  - script: |
+      echo "Starting Capacitor iOS Sync..."
       
-      ionic cap add ios
-      
-      echo "Syncing iOS platform..."
-      ionic cap sync ios --force
-      
-      PBXPROJ_PATH="ios/App/App.xcodeproj/project.pbxproj"
-      
-      if [ ! -f "$PBXPROJ_PATH" ]; then
-        echo "##vso[task.logissue type=error] pbxproj file not found!"
+      # 실행 결과를 로그 파일에 저장
+      LOG_FILE="capacitor_sync_ios.log"
+      ionic cap sync ios --force > $LOG_FILE 2>&1 || {
+        echo "Capacitor sync failed. Analyzing logs..."
+        
+        # Podfile 관련 오류만 필터링
+        echo "=== Podfile Errors ==="
+        grep -i "podfile" $LOG_FILE || echo "No Podfile errors found."
+        
+        # ENOENT (파일 없음) 관련 오류만 필터링
+        echo "=== ENOENT Errors ==="
+        grep -i "enoent" $LOG_FILE || echo "No ENOENT errors found."
+        
+        # 전체 로그 경로 출력
+        echo "Full logs saved to: $LOG_FILE"
+        
         exit 1
-      fi
+      }
       
-      # Set CODE_SIGN_STYLE to Automatic for all targets
-      sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Automatic;/g' "$PBXPROJ_PATH"
-      
-      # Remove provisioning profile settings from Pods targets
-      sed -i '' '/PROVISIONING_PROFILE_SPECIFIER/d' "$PBXPROJ_PATH"
-      
-      echo "Updated Xcode project for automatic signing."
-    displayName: 'Update Xcode Project for Signing'
+      echo "Capacitor iOS Sync completed successfully."
+    displayName: 'Sync iOS Platform with Filtered Logs'
 
   - script: |
       cd ios/App
-      
       pod install --repo-update
-      
-      if [ $? -ne 0 ]; then
-        echo "##vso[task.logissue type=error] CocoaPods installation failed!"
-        exit 1
-      fi
-      
-      echo "CocoaPods dependencies installed successfully."
     displayName: 'Install Pods'
     
   - script: |
