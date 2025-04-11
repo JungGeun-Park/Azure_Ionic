@@ -122,25 +122,29 @@ steps:
     displayName: 'Detect App Name'
 
   - script: |
-      echo "Extracting Bundle ID from Info.plist..."
+      echo "Extracting Bundle ID from Xcode build settings..."
       
-      INFO_PLIST_PATH="ios/App/App/Info.plist"
+      cd ios/App
       
-      if [ -f "$INFO_PLIST_PATH" ]; then
-          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$INFO_PLIST_PATH")
-          
-          if [ -z "$BUNDLE_ID" ]; then
-              echo "##vso[task.logissue type=error] Failed to extract Bundle ID from Info.plist!"
-              exit 1
-          fi
-          
-          echo "Extracted BUNDLE_ID: $BUNDLE_ID"
-          echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
-      else
-          echo "##vso[task.logissue type=error] Info.plist not found at $INFO_PLIST_PATH!"
+      # Xcode 빌드 설정에서 PRODUCT_BUNDLE_IDENTIFIER 추출
+      BUNDLE_ID=$(xcodebuild -showBuildSettings \
+                -workspace "App.xcworkspace" \
+                -scheme "App" \
+                -configuration Release \
+                -sdk iphoneos 2>/dev/null | \
+                grep -E 'PRODUCT_BUNDLE_IDENTIFIER' | \
+                awk -F '= ' '{print $2}' | \
+                tr -d '"')
+      
+      if [ -z "$BUNDLE_ID" ]; then
+          echo "##vso[task.logissue type=error] Failed to extract Bundle ID!"
           exit 1
       fi
-    displayName: 'Extract Bundle ID from Info.plist'
+      
+      echo "Extracted BUNDLE_ID: $BUNDLE_ID"
+      echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
+    displayName: 'Extract Bundle ID from Xcode Build Settings'
+
 
   - script: |
       cd ios/App
