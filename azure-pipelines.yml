@@ -76,15 +76,29 @@ steps:
     displayName: 'Fix iOS Directory Permissions'
 
   - script: |
-      echo "Regenerate iOS platform..."
-      rm -rf ios/App
-      ionic cap sync ios --force --verbose  # --verbose 추가
+      echo "Starting Capacitor iOS Sync..."
       
-      if [ ! -f "ios/App/Podfile" ]; then
-        echo "##vso[task.logissue type=error] Podfile still missing!"
+      # 실행 결과를 로그 파일에 저장
+      LOG_FILE="capacitor_sync_ios.log"
+      ionic cap sync ios --force > $LOG_FILE 2>&1 || {
+        echo "Capacitor sync failed. Analyzing logs..."
+        
+        # Podfile 관련 오류만 필터링
+        echo "=== Podfile Errors ==="
+        grep -i "podfile" $LOG_FILE || echo "No Podfile errors found."
+        
+        # ENOENT (파일 없음) 관련 오류만 필터링
+        echo "=== ENOENT Errors ==="
+        grep -i "enoent" $LOG_FILE || echo "No ENOENT errors found."
+        
+        # 전체 로그 경로 출력
+        echo "Full logs saved to: $LOG_FILE"
+        
         exit 1
-      fi
-    displayName: 'Force iOS Regeneration'
+      }
+      
+      echo "Capacitor iOS Sync completed successfully."
+    displayName: 'Sync iOS Platform with Filtered Logs'
 
   - script: |
       cd ios/App
