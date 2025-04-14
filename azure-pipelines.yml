@@ -244,7 +244,7 @@ trigger:
 variables:
   BUILD_DIR: 'build'
   IPA_PATH: '$(BUILD_DIR)/ipa/App.ipa'
-  TEAM_ID: 22X77ENQ2H
+  TEAM_ID: '22X77ENQ2H'
 
 pool:
   name: APPSEALING
@@ -274,7 +274,7 @@ steps:
 - script: |
     BUNDLE_ID=$(grep PRODUCT_BUNDLE_IDENTIFIER ios/App/App.xcodeproj/project.pbxproj | head -1 | sed 's/.*= \(.*\);/\1/')
     PROVISION_NAME=$(security cms -D -i ios/App/profile.mobileprovision | grep -aA1 Name | grep -v Name | sed -e 's/.*<string>\(.*\)<\/string>.*/\1/')
-    TEAM_ID=$(security cms -D -i ios/App/profile.mobileprovision | grep -a1 TeamIdentifier | tail -n1 | sed -e 's/.*<string>\(.*\)<\/string>.*/\1/')
+    # TEAM_ID=$(security cms -D -i ios/App/profile.mobileprovision | grep -a1 TeamIdentifier | tail -n1 | sed -e 's/.*<string>\(.*\)<\/string>.*/\1/')
     echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
     echo "##vso[task.setvariable variable=PROVISION_NAME]$PROVISION_NAME"
     echo "##vso[task.setvariable variable=TEAM_ID]$TEAM_ID"
