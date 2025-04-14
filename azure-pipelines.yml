@@ -302,6 +302,7 @@ steps:
     </dict>
     </plist>
     EOF
+    cat "ExportOptions.plist"
   displayName: 'ExportOptions.plist 생성'
 
 # 4. 배포 인증서 설치
