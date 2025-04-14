@@ -363,7 +363,7 @@ steps:
                CODE_SIGN_STYLE="Manual" \
                PROVISIONING_PROFILE_SPECIFIER="$PROVISION_NAME" \
                CODE_SIGN_IDENTITY="Apple Distribution" \
-               DEVELOPMENT_TEAM="$(TEAM_ID)"
+               DEVELOPMENT_TEAM="$(TEAM_ID)"\
                archive
 
     xcodebuild -exportArchive \
