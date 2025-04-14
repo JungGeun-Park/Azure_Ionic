@@ -245,6 +245,8 @@ variables:
   BUILD_DIR: 'build'
   IPA_PATH: '$(BUILD_DIR)/ipa/App.ipa'
   TEAM_ID: '22X77ENQ2H'
+  PROVISIONING_PROFILE_NAME: 'AppSealing Wildcard Distribution Profile'
+
 
 pool:
   name: APPSEALING
@@ -300,7 +302,7 @@ steps:
 # 2. 번들 ID 및 프로비저닝 정보 추출
 - script: |
     BUNDLE_ID=$(grep PRODUCT_BUNDLE_IDENTIFIER ios/App/App.xcodeproj/project.pbxproj | head -1 | sed 's/.*= \(.*\);/\1/')
-    PROVISION_NAME=$(security cms -D -i ios/App/profile.mobileprovision | grep -aA1 Name | grep -v Name | sed -e 's/.*<string>\(.*\)<\/string>.*/\1/')
+    # PROVISION_NAME=$(security cms -D -i ios/App/profile.mobileprovision | grep -aA1 Name | grep -v Name | sed -e 's/.*<string>\(.*\)<\/string>.*/\1/')
     # TEAM_ID=$(security cms -D -i ios/App/profile.mobileprovision | grep -a1 TeamIdentifier | tail -n1 | sed -e 's/.*<string>\(.*\)<\/string>.*/\1/')
     # cp ios/App/profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles
 
@@ -331,7 +333,7 @@ steps:
         <key>provisioningProfiles</key>
         <dict>
             <key>${BUNDLE_ID}</key>
-            <string>${PROVISION_NAME}</string>
+            <string>$(PROVISIONING_PROFILE_NAME)</string>
         </dict>
         <key>signingCertificate</key>
         <string>Apple Distribution</string>
@@ -380,7 +382,7 @@ steps:
                -scheme App \
                -archivePath $(BUILD_DIR)/App.xcarchive \
                CODE_SIGN_STYLE="Manual" \
-               PROVISIONING_PROFILE_SPECIFIER="$PROVISION_NAME" \
+               PROVISIONING_PROFILE_SPECIFIER="$(PROVISIONING_PROFILE_NAME)" \
                CODE_SIGN_IDENTITY="Apple Distribution" \
                DEVELOPMENT_TEAM="$(TEAM_ID)"\
                archive
