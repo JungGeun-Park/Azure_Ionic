@@ -292,18 +292,18 @@ steps:
   displayName: 'ExportOptions.plist 생성'
 
 # 4. 배포 인증서 설치
-- task: InstallAppleCertificate@2
-  inputs:
-    certSecureFile: 'ios/App/distribution.p12'
-    certPwd: '123456'
-    keychain: 'temp'
-  displayName: '배포 인증서 설치'
+# - task: InstallAppleCertificate@2
+#   inputs:
+#     certSecureFile: 'ios/App/distribution.p12'
+#     certPwd: '123456'
+#     keychain: 'temp'
+#   displayName: '배포 인증서 설치'
 
-# 5. 프로비저닝 프로파일 설치
-- script: |
-    mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-    cp ios/App/profile.provision ~/Library/MobileDevice/Provisioning\ Profiles
-  displayName: '프로비저닝 프로파일 설치'
+# # 5. 프로비저닝 프로파일 설치
+# - script: |
+#     mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+#     cp ios/App/profile.provision ~/Library/MobileDevice/Provisioning\ Profiles
+#   displayName: '프로비저닝 프로파일 설치'
 
 # 6. iOS 빌드 및 IPA 생성
 - script: |
