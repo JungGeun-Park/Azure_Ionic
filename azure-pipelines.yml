@@ -286,9 +286,9 @@ steps:
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
     <plist version="1.0">
-    <dict>
+      <dict>
         <key>method</key>
-        <string>app-store</string>
+        <string>app-store-connect</string>
         <key>provisioningProfiles</key>
         <dict>
             <key>${BUNDLE_ID}</key>
@@ -299,12 +299,27 @@ steps:
         <key>signingStyle</key>
         <string>manual</string>
         <key>teamID</key>
-        <string>${TEAM_ID}</string>
-    </dict>
+        <string>$(TEAM_ID)</string>
+      </dict>
     </plist>
     EOF
     cat "ExportOptions.plist"
   displayName: 'ExportOptions.plist 생성'
+#       <?xml version="1.0" encoding="UTF-8"?>
+#       <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+#       <plist version="1.0">
+#         <dict>
+#             <key>method</key>
+#             <string>app-store-connect</string>
+#             <key>teamID</key>
+#             <string>${{ parameters.TEAM_ID }}</string>
+#             <key>provisioningProfiles</key>
+#             <dict>
+#                 <key>$BUNDLE_ID</key>
+#                 <string>${{ parameters.PROVISIONING_PROFILE_NAME }}</string>
+#             </dict>
+#         </dict>
+#       </plist>
 
 # 4. 배포 인증서 설치
 # - task: InstallAppleCertificate@2
