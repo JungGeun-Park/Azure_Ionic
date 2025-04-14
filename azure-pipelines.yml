@@ -137,13 +137,12 @@ steps:
 - script: |
     # Grant execution permission to generate_hash script
     HASH_SCRIPT_PATH="$(Build.SourcesDirectory)/ios/App/AppSealingSDK/Tools/generate_hash"
-    IPA_PATH=$(find "$(Build.ArtifactStagingDirectory)" -type f -name "*.ipa" | head -n 1)
 
     echo "Granting execution permission to generate_hash..."
     chmod +x "$HASH_SCRIPT_PATH"
 
     echo "Running generate_hash with IPA... $IPA_PATH"
-    "$HASH_SCRIPT_PATH" "$IPA_PATH"
+    "$HASH_SCRIPT_PATH" "$(IPA_PATH)"
   displayName: 'Run generate_hash on IPA'
 
 # 7. TestFlight 업로드 (App-Specific Password 사용)
