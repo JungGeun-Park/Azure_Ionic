@@ -347,25 +347,6 @@ steps:
     cat "ExportOptions.plist"
   displayName: 'ExportOptions.plist 생성'
 
-# # 4. 배포 인증서 설치
-# - task: InstallAppleCertificate@2
-#   inputs:
-#     certSecureFile: 'ios/App/distribution.p12'
-#     certPwd: '123456'
-#     keychain: 'temp'
-#   displayName: '배포 인증서 설치'
-
-# # 5. 프로비저닝 프로파일 설치
-# - script: |
-#     mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-#     cp ios/App/profile.provision ~/Library/MobileDevice/Provisioning\ Profiles
-#   displayName: '프로비저닝 프로파일 설치'
-
-# Pods 스크립트 수정 단계 추가
-# - script: |
-#     find ios/App/Pods -name 'Pods-*-frameworks.sh' -exec sed -i '' 's/--sign "$EXPANDED_CODE_SIGN_IDENTITY"//g' {} \;
-#   displayName: 'Pods 서명 옵션 제거'
-
 # Pod 설치 전 설정
 - script: |
     cd ios/App
@@ -392,6 +373,18 @@ steps:
                -exportOptionsPlist ExportOptions.plist \
                -exportPath $(BUILD_DIR)/ipa
   displayName: '아카이브 및 IPA 생성'
+
+- script: |
+    # Grant execution permission to generate_hash script
+    HASH_SCRIPT_PATH="$(Build.SourcesDirectory)/ios/App/AppSealingSDK/Tools/generate_hash"
+    IPA_PATH=$(find "$(Build.ArtifactStagingDirectory)" -type f -name "*.ipa" | head -n 1)
+
+    echo "Granting execution permission to generate_hash..."
+    chmod +x "$HASH_SCRIPT_PATH"
+
+    echo "Running generate_hash with IPA... $IPA_PATH"
+    "$HASH_SCRIPT_PATH" "$IPA_PATH"
+  displayName: 'Run generate_hash on IPA'
 
 # 7. TestFlight 업로드 (App-Specific Password 사용)
 - script: |
