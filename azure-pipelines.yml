@@ -349,9 +349,9 @@ steps:
 #   displayName: '프로비저닝 프로파일 설치'
 
 # Pods 스크립트 수정 단계 추가
-- script: |
-    find ios/App/Pods -name 'Pods-*-frameworks.sh' -exec sed -i '' 's/--sign "$EXPANDED_CODE_SIGN_IDENTITY"//g' {} \;
-  displayName: 'Pods 서명 옵션 제거'
+# - script: |
+#     find ios/App/Pods -name 'Pods-*-frameworks.sh' -exec sed -i '' 's/--sign "$EXPANDED_CODE_SIGN_IDENTITY"//g' {} \;
+#   displayName: 'Pods 서명 옵션 제거'
 
 # 6. iOS 빌드 및 IPA 생성
 - script: |
