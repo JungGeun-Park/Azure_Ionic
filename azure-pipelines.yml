@@ -244,6 +244,7 @@ trigger:
 variables:
   BUILD_DIR: 'build'
   IPA_PATH: '$(BUILD_DIR)/ipa/App.ipa'
+  TEAM_ID: 22X77ENQ2H
 
 pool:
   name: APPSEALING
