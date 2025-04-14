@@ -306,7 +306,7 @@ steps:
     cat "ExportOptions.plist"
   displayName: 'ExportOptions.plist 생성'
 
-4. 배포 인증서 설치
+# 4. 배포 인증서 설치
 - task: InstallAppleCertificate@2
   inputs:
     certSecureFile: 'ios/App/distribution.p12'
