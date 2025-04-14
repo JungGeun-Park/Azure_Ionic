@@ -258,12 +258,12 @@ steps:
 - task: DownloadSecureFile@1
   name: distributionCert
   inputs:
-    secureFile: 'distribution.p12'  # Azure Secure Files에 업로드된 인증서
+    secureFile: 'ios/App/distribution.p12'  # Azure Secure Files에 업로드된 인증서
 
 - task: DownloadSecureFile@1
   name: provisioningProfile
   inputs:
-    secureFile: 'profile.provision' # Azure Secure Files에 업로드된 프로파일
+    secureFile: 'ios/App/profile.provision' # Azure Secure Files에 업로드된 프로파일
 
 - script: |
     # Bundle ID & App Name 동적 추출 (capacitor.config.json)
