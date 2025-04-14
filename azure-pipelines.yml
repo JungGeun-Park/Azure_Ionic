@@ -265,6 +265,8 @@ steps:
     npm install -g @ionic/cli
     npm ci
     npx cap sync ios
+    npm run build
+    npx cap sync ios
   displayName: '의존성 설치 및 프로젝트 설정'
 
 # 2. 번들 ID 및 프로비저닝 정보 추출
