@@ -236,105 +236,96 @@
 trigger:
 - main
 
+# variables:
+#   CERT_PASSWORD: 123456
+#   TEAM_ID: 22X77ENQ2H
+#   APPLE_ID: puzznic@inka.co.kr
+#   APP_SPECIFIC_PASSWORD: qbrz-hmfz-robj-eohm
 variables:
-  CERT_PASSWORD: 123456
-  TEAM_ID: 22X77ENQ2H
-  APPLE_ID: puzznic@inka.co.kr
-  APP_SPECIFIC_PASSWORD: qbrz-hmfz-robj-eohm
+  BUILD_DIR: 'build'
+  IPA_PATH: '$(BUILD_DIR)/ipa/App.ipa'
 
 pool:
   name: APPSEALING
 
 steps:
-- task: NodeTool@0
-  inputs:
-    versionSpec: '18.x'    # Node.js LTS 버전
-
+# 1. 의존성 설치 및 프로젝트 설정
 - script: |
     npm install -g @ionic/cli
-    npm install -g @capacitor/cli
-  displayName: 'Install Ionic & Capacitor'
+    npm ci
+    npx cap sync ios
+  displayName: '의존성 설치 및 프로젝트 설정'
 
-- task: DownloadSecureFile@1
-  name: distributionCert
-  inputs:
-    secureFile: "$(Build.SourcesDirectory)/ios/App/distribution.p12"  # Azure Secure Files에 업로드된 인증서
-
-- task: DownloadSecureFile@1
-  name: provisioningProfile
-  inputs:
-    secureFile: "$(Build.SourcesDirectory)ios/App/profile.provision" # Azure Secure Files에 업로드된 프로파일
-
+# 2. 번들 ID 및 프로비저닝 정보 추출
 - script: |
-    # Bundle ID & App Name 동적 추출 (capacitor.config.json)
-    APP_ID=$(jq -r '.appId' capacitor.config.json)
-    APP_NAME=$(jq -r '.appName' capacitor.config.json)
-    echo "##vso[task.setvariable variable=APP_ID]$APP_ID"
-    echo "##vso[task.setvariable variable=APP_NAME]$APP_NAME"
-  displayName: 'Extract Bundle ID & App Name'
+    BUNDLE_ID=$(grep PRODUCT_BUNDLE_IDENTIFIER ios/App/App.xcodeproj/project.pbxproj | head -1 | sed 's/.*= \(.*\);/\1/')
+    PROVISION_NAME=$(security cms -D -i ios/App/profile.provision | grep -aA1 Name | grep -v Name | sed -e 's/.*<string>\(.*\)<\/string>.*/\1/')
+    TEAM_ID=$(security cms -D -i ios/App/profile.provision | grep -a1 TeamIdentifier | tail -n1 | sed -e 's/.*<string>\(.*\)<\/string>.*/\1/')
+    echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
+    echo "##vso[task.setvariable variable=PROVISION_NAME]$PROVISION_NAME"
+    echo "##vso[task.setvariable variable=TEAM_ID]$TEAM_ID"
+  displayName: '번들 ID 및 프로비저닝 정보 추출'
 
+# 3. ExportOptions.plist 생성
 - script: |
-    # 인증서 및 프로파일 설정
-    security create-keychain -p azure azure.keychain
-    security import $(distributionCert.secureFilePath) -P "$(CERT_PASSWORD)" -k ~/Library/Keychains/azure.keychain -T /usr/bin/codesign
-    security list-keychains -s ~/Library/Keychains/azure.keychain
-    security default-keychain -s ~/Library/Keychains/azure.keychain
-    security unlock-keychain -p azure ~/Library/Keychains/azure.keychain
-
-    # 프로비저닝 프로파일 UUID 추출
-    PROVISION_UUID=$(grep UUID -A1 -a $(provisioningProfile.secureFilePath) | grep -io "[-A-F0-9]\{36\}")
-    mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-    cp $(provisioningProfile.secureFilePath) ~/Library/MobileDevice/Provisioning\ Profiles/$PROVISION_UUID.mobileprovision
-  displayName: 'Setup Certificates & Profiles'
-
-- script: |
-    # exportOptions.plist 생성
-    cat <<EOF > exportOptions.plist
-    <?xml version="1.0" encoding="UTF-8"?>
-    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-    <plist version="1.0">
+    cat <<EOF > ExportOptions.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>app-store</string>
+    <key>provisioningProfiles</key>
     <dict>
-        <key>method</key>
-        <string>app-store</string>
-        <key>teamID</key>
-        <string>$(TEAM_ID)</string>
-        <key>provisioningProfiles</key>
-        <dict>
-            <key>$(APP_ID)</key>
-            <string>$PROVISION_UUID</string>
-        </dict>
+        <key>${BUNDLE_ID}</key>
+        <string>${PROVISION_NAME}</string>
     </dict>
-    </plist>
-    EOF
-  displayName: 'Generate exportOptions.plist'
+    <key>signingCertificate</key>
+    <string>Apple Distribution</string>
+    <key>signingStyle</key>
+    <string>manual</string>
+    <key>teamID</key>
+    <string>${TEAM_ID}</string>
+</dict>
+</plist>
+EOF
+  displayName: 'ExportOptions.plist 생성'
 
-- script: |
-    # Ionic 프로젝트 빌드
-    ionic build --prod
-    npx cap add ios
-    cd ios/App
-    pod install --repo-update
-    cd ../..
-  displayName: 'Build Ionic Project'
+# 4. 배포 인증서 설치
+- task: InstallAppleCertificate@2
+  inputs:
+    certSecureFile: 'ios/App/distribution.p12'
+    certPwd: '123456'
+    keychain: 'temp'
+  displayName: '배포 인증서 설치'
 
+# 5. 프로비저닝 프로파일 설치
 - script: |
-    # Xcode 아카이브 및 IPA 생성
+    mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+    cp ios/App/profile.provision ~/Library/MobileDevice/Provisioning\ Profiles
+  displayName: '프로비저닝 프로파일 설치'
+
+# 6. iOS 빌드 및 IPA 생성
+- script: |
+    mkdir -p $(BUILD_DIR)
+    
     xcodebuild -workspace ios/App/App.xcworkspace \
                -scheme App \
-               -archivePath build/App.xcarchive \
+               -archivePath $(BUILD_DIR)/App.xcarchive \
                archive
 
     xcodebuild -exportArchive \
-               -archivePath build/App.xcarchive \
-               -exportPath build/ \
-               -exportOptionsPlist exportOptions.plist
-  displayName: 'Create IPA'
+               -archivePath $(BUILD_DIR)/App.xcarchive \
+               -exportOptionsPlist ExportOptions.plist \
+               -exportPath $(BUILD_DIR)/ipa
+  displayName: '아카이브 및 IPA 생성'
 
+# 7. TestFlight 업로드 (App-Specific Password 사용)
 - script: |
-    # TestFlight 업로드
     xcrun altool --upload-app \
-                 -f "build/$(APP_NAME).ipa" \
-                 -t ios \
-                 -u "$(APPLE_ID)" \
-                 -p "$(APP_SPECIFIC_PASSWORD)"
-  displayName: 'Upload to TestFlight'
+                 --type ios \
+                 --file "$(IPA_PATH)" \
+                 --username "puzznic@inka.co.kr" \
+                 --password "qbrz-hmfz-robj-eohm" \
+                 --output-format xml
+  displayName: 'TestFlight 업로드'
