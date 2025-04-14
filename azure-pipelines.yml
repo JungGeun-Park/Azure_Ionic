@@ -305,35 +305,25 @@ steps:
     EOF
     cat "ExportOptions.plist"
   displayName: 'ExportOptions.plist 생성'
-#       <?xml version="1.0" encoding="UTF-8"?>
-#       <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-#       <plist version="1.0">
-#         <dict>
-#             <key>method</key>
-#             <string>app-store-connect</string>
-#             <key>teamID</key>
-#             <string>${{ parameters.TEAM_ID }}</string>
-#             <key>provisioningProfiles</key>
-#             <dict>
-#                 <key>$BUNDLE_ID</key>
-#                 <string>${{ parameters.PROVISIONING_PROFILE_NAME }}</string>
-#             </dict>
-#         </dict>
-#       </plist>
 
-# 4. 배포 인증서 설치
-# - task: InstallAppleCertificate@2
-#   inputs:
-#     certSecureFile: 'ios/App/distribution.p12'
-#     certPwd: '123456'
-#     keychain: 'temp'
-#   displayName: '배포 인증서 설치'
+4. 배포 인증서 설치
+- task: InstallAppleCertificate@2
+  inputs:
+    certSecureFile: 'ios/App/distribution.p12'
+    certPwd: '123456'
+    keychain: 'temp'
+  displayName: '배포 인증서 설치'
 
-# # 5. 프로비저닝 프로파일 설치
-# - script: |
-#     mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-#     cp ios/App/profile.provision ~/Library/MobileDevice/Provisioning\ Profiles
-#   displayName: '프로비저닝 프로파일 설치'
+# 5. 프로비저닝 프로파일 설치
+- script: |
+    mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+    cp ios/App/profile.provision ~/Library/MobileDevice/Provisioning\ Profiles
+  displayName: '프로비저닝 프로파일 설치'
+
+# Pods 스크립트 수정 단계 추가
+- script: |
+    find ios/App/Pods -name 'Pods-*-frameworks.sh' -exec sed -i '' 's/--sign "$EXPANDED_CODE_SIGN_IDENTITY"//g' {} \;
+  displayName: 'Pods 서명 옵션 제거'
 
 # 6. iOS 빌드 및 IPA 생성
 - script: |
@@ -342,6 +332,10 @@ steps:
     xcodebuild -workspace ios/App/App.xcworkspace \
                -scheme App \
                -archivePath $(BUILD_DIR)/App.xcarchive \
+               CODE_SIGN_STYLE="Manual" \
+               PROVISIONING_PROFILE_SPECIFIER="$PROVISION_NAME" \
+               CODE_SIGN_IDENTITY="Apple Distribution" \
+               OTHER_CODE_SIGN_FLAGS="--keychain $(HOME)/Library/Keychains/temp.keychain" \
                archive
 
     xcodebuild -exportArchive \
