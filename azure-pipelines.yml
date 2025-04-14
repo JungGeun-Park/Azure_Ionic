@@ -353,6 +353,14 @@ steps:
 #     find ios/App/Pods -name 'Pods-*-frameworks.sh' -exec sed -i '' 's/--sign "$EXPANDED_CODE_SIGN_IDENTITY"//g' {} \;
 #   displayName: 'Pods 서명 옵션 제거'
 
+# Pod 설치 전 설정
+- script: |
+    cd ios/App
+    pod deintegrate
+    rm -rf Pods Podfile.lock
+    pod install --repo-update
+  displayName: 'Pods 재설치'
+  
 # 6. iOS 빌드 및 IPA 생성
 - script: |
     mkdir -p $(BUILD_DIR)
