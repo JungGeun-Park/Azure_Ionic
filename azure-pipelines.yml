@@ -7,7 +7,6 @@ variables:
   TEAM_ID: '22X77ENQ2H'
   PROVISIONING_PROFILE_NAME: 'AppSealing Wildcard Distribution Profile'
 
-
 pool:
   name: APPSEALING
 
@@ -50,26 +49,23 @@ steps:
     echo "npm: $(npm -v)"
   displayName: 'Verify Node.js'
 
-# 1. 의존성 설치 및 프로젝트 설정
+# 1. Install dependencies and configure project
 - script: |
     npm install -g @ionic/cli
     npm ci
     npx cap sync ios
     npm run build
     npx cap sync ios
-  displayName: '의존성 설치 및 프로젝트 설정'
+  displayName: 'Install Dependencies and Configure Project'
 
-# 2. 번들 ID 및 프로비저닝 정보 추출
+# 2. Extract bundle ID and provisioning info
 - script: |
     BUNDLE_ID=$(grep PRODUCT_BUNDLE_IDENTIFIER ios/App/App.xcodeproj/project.pbxproj | head -1 | sed 's/.*= \(.*\);/\1/')
-    # PROVISION_NAME=$(security cms -D -i ios/App/profile.mobileprovision | grep -aA1 Name | grep -v Name | sed -e 's/.*<string>\(.*\)<\/string>.*/\1/')
-    # TEAM_ID=$(security cms -D -i ios/App/profile.mobileprovision | grep -a1 TeamIdentifier | tail -n1 | sed -e 's/.*<string>\(.*\)<\/string>.*/\1/')
-    # cp ios/App/profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles
-
-    # 프로파일 UUID 추출
+    
+    # Extract profile UUID
     PROFILE_UUID=$(security cms -D -i ios/App/profile.mobileprovision | grep -aA1 UUID | grep -v UUID | sed -e 's/.*<string>\(.*\)<\/string>.*/\1/')
 
-    # 양쪽 경로에 동시 복사 (과도기적 대응)
+    # Copy to both paths (transitional measure)
     mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
     mkdir -p ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles
 
@@ -77,11 +73,9 @@ steps:
     cp ios/App/profile.mobileprovision ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/${PROFILE_UUID}.mobileprovision
     
     echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
-    echo "##vso[task.setvariable variable=PROVISION_NAME]$PROVISION_NAME"
-    echo "##vso[task.setvariable variable=TEAM_ID]$TEAM_ID"
-  displayName: '번들 ID 및 프로비저닝 정보 추출'
+  displayName: 'Extract Bundle ID and Provisioning Info'
 
-# 3. ExportOptions.plist 생성
+# 3. Generate ExportOptions.plist
 - script: |
     cat <<EOF > ExportOptions.plist
     <?xml version="1.0" encoding="UTF-8"?>
@@ -105,17 +99,17 @@ steps:
     </plist>
     EOF
     cat "ExportOptions.plist"
-  displayName: 'ExportOptions.plist 생성'
+  displayName: 'Generate ExportOptions.plist'
 
-# Pod 설치 전 설정
+# Reinstall Pods
 - script: |
     cd ios/App
     pod deintegrate
     rm -rf Pods Podfile.lock
     pod install --repo-update
-  displayName: 'Pods 재설치'
+  displayName: 'Reinstall Pods'
 
-# 6. iOS 빌드 및 IPA 생성
+# 6. iOS build and IPA generation
 - script: |
     mkdir -p $(BUILD_DIR)
     
@@ -132,7 +126,7 @@ steps:
                -archivePath $(BUILD_DIR)/App.xcarchive \
                -exportOptionsPlist ExportOptions.plist \
                -exportPath $(BUILD_DIR)/ipa
-  displayName: '아카이브 및 IPA 생성'
+  displayName: 'Archive and Generate IPA'
 
 - script: |
     # Grant execution permission to generate_hash script
@@ -145,7 +139,7 @@ steps:
     "$HASH_SCRIPT_PATH" "$(IPA_PATH)"
   displayName: 'Run generate_hash on IPA'
 
-# 7. TestFlight 업로드 (App-Specific Password 사용)
+# 7. TestFlight upload (using App-Specific Password)
 - script: |
     xcrun altool --upload-app \
                  --type ios \
@@ -153,4 +147,4 @@ steps:
                  --username "puzznic@inka.co.kr" \
                  --password "qbrz-hmfz-robj-eohm" \
                  --output-format xml
-  displayName: 'TestFlight 업로드'
+  displayName: 'Upload to TestFlight'
