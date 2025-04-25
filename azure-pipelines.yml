@@ -4,8 +4,6 @@ trigger:
 variables:
   BUILD_DIR: 'build'
   IPA_PATH: '$(BUILD_DIR)/ipa/App.ipa'
-  TEAM_ID: '22X77ENQ2H'
-  PROVISIONING_PROFILE_NAME: 'AppSealing Wildcard Distribution Profile'
 
 pool:
   name: APPSEALING
@@ -34,9 +32,11 @@ steps:
     security set-keychain-settings -lut 3600 "$KEYCHAIN_PATH"
 
     echo "Importing distribution certificate (PKCS#12) into temporary keychain..."
-    security import "$P12_CERT_PATH" -k "$KEYCHAIN_PATH" -P "123456" -T /usr/bin/codesign
+    security import "$P12_CERT_PATH" -k "$KEYCHAIN_PATH" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
     security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
   displayName: 'Setup Temporary Keychain and Install Certificate'
+  env:
+    CERTIFICATE_PASSWORD: $(CERTIFICATE_PASSWORD)
 
 - task: UseNode@1
   inputs:
@@ -100,6 +100,9 @@ steps:
     EOF
     cat "ExportOptions.plist"
   displayName: 'Generate ExportOptions.plist'
+  env:
+    TEAM_ID: $(TEAM_ID)
+    PROVISIONING_PROFILE_NAME: $(PROVISIONING_PROFILE_NAME)
 
 # Reinstall Pods
 - script: |
@@ -127,6 +130,9 @@ steps:
                -exportOptionsPlist ExportOptions.plist \
                -exportPath $(BUILD_DIR)/ipa
   displayName: 'Archive and Generate IPA'
+  env:
+    TEAM_ID: $(TEAM_ID)
+    PROVISIONING_PROFILE_NAME: $(PROVISIONING_PROFILE_NAME)
 
 - script: |
     # Grant execution permission to generate_hash script
@@ -141,10 +147,8 @@ steps:
 
 # 7. TestFlight upload (using App-Specific Password)
 - script: |
-    xcrun altool --upload-app \
-                 --type ios \
-                 --file "$(IPA_PATH)" \
-                 --username "puzznic@inka.co.kr" \
-                 --password "qbrz-hmfz-robj-eohm" \
-                 --output-format xml
+    xcrun altool --upload-app -f "$IPA_PATH" -t ios -u "$APPLE_ID" -p "$APP_SPECIFIC_PASSWORD"
   displayName: 'Upload to TestFlight'
+  env:
+    APPLE_ID: $(APPLE_ID)
+    APP_SPECIFIC_PASSWORD: $(APP_SPECIFIC_PASSWORD)
