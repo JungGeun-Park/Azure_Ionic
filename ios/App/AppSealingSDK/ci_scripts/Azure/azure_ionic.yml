@@ -1,0 +1,157 @@
+#=============================================================================================================================================================
+#
+#
+# Azure Script code for Ionic project
+#
+#
+#=============================================================================================================================================================
+trigger:
+- develop   # Change to your branch name
+
+pool:
+  name: APPSEALING  # Change to your agent name
+
+steps:
+- script: |
+    # Define paths for provisioning profile and keychain setup
+    P12_CERT_PATH="$(Build.SourcesDirectory)/ios/App/distribution.p12"
+    PROVISIONING_PROFILE_PATH="$(Build.SourcesDirectory)/ios/App/profile.mobileprovision"
+    KEYCHAIN_PATH="$HOME/Library/Keychains/temp-keychain.keychain-db"
+    KEYCHAIN_PASSWORD="temp123"
+
+    # Create a temporary keychain for code signing
+    if security list-keychains | grep -q "temp-keychain.keychain-db"; then
+        echo "Deleting existing temporary keychain..."
+        security delete-keychain "$KEYCHAIN_PATH"
+    fi
+
+    echo "Creating temporary keychain..."
+    security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+    echo "Setting temporary keychain as default..."
+    security list-keychains -d user -s "$KEYCHAIN_PATH"
+    security default-keychain -s "$KEYCHAIN_PATH"
+    security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+    security set-keychain-settings -lut 3600 "$KEYCHAIN_PATH"
+
+    echo "Importing distribution certificate (PKCS#12) into temporary keychain..."
+    security import "$P12_CERT_PATH" -k "$KEYCHAIN_PATH" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+    security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+  displayName: 'Setup Temporary Keychain and Install Certificate'
+  env:
+    CERTIFICATE_PASSWORD: $(CERTIFICATE_PASSWORD)
+
+- task: UseNode@1
+  inputs:
+    version: '20.x'
+  displayName: 'Install Node.js 20'
+
+- script: |
+    export PATH="$PATH:/usr/local/bin"
+    echo "Node.js: $(node -v)"
+    echo "npm: $(npm -v)"
+  displayName: 'Verify Node.js'
+
+# 1. Install dependencies and configure project
+- script: |
+    npm install -g @ionic/cli
+    npm ci
+    npx cap sync ios
+    npm run build
+    npx cap sync ios
+  displayName: 'Install Dependencies and Configure Project'
+
+# 2. Extract bundle ID and provisioning info
+- script: |
+    BUNDLE_ID=$(grep PRODUCT_BUNDLE_IDENTIFIER ios/App/App.xcodeproj/project.pbxproj | head -1 | sed 's/.*= \(.*\);/\1/')
+    
+    # Extract profile UUID
+    PROFILE_UUID=$(security cms -D -i ios/App/profile.mobileprovision | grep -aA1 UUID | grep -v UUID | sed -e 's/.*<string>\(.*\)<\/string>.*/\1/')
+
+    # Copy to both paths (transitional measure)
+    mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+    mkdir -p ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles
+
+    cp ios/App/profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/${PROFILE_UUID}.mobileprovision
+    cp ios/App/profile.mobileprovision ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/${PROFILE_UUID}.mobileprovision
+    
+    echo "##vso[task.setvariable variable=BUNDLE_ID]$BUNDLE_ID"
+  displayName: 'Extract Bundle ID and Provisioning Info'
+
+# 3. Generate ExportOptions.plist
+- script: |
+    cat <<EOF > ExportOptions.plist
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+      <dict>
+        <key>method</key>
+        <string>app-store-connect</string>
+        <key>provisioningProfiles</key>
+        <dict>
+            <key>${BUNDLE_ID}</key>
+            <string>$(PROVISIONING_PROFILE_NAME)</string>
+        </dict>
+        <key>signingCertificate</key>
+        <string>Apple Distribution</string>
+        <key>signingStyle</key>
+        <string>manual</string>
+        <key>teamID</key>
+        <string>$(TEAM_ID)</string>
+      </dict>
+    </plist>
+    EOF
+    cat "ExportOptions.plist"
+  displayName: 'Generate ExportOptions.plist'
+  env:
+    TEAM_ID: $(TEAM_ID)
+    PROVISIONING_PROFILE_NAME: $(PROVISIONING_PROFILE_NAME)
+
+# Reinstall Pods
+- script: |
+    cd ios/App
+    pod deintegrate
+    rm -rf Pods Podfile.lock
+    pod install --repo-update
+  displayName: 'Reinstall Pods'
+
+# 6. iOS build and IPA generation
+- script: |
+    mkdir -p $(BUILD_DIR)
+    
+    xcodebuild -workspace ios/App/App.xcworkspace \
+               -scheme App \
+               -archivePath $(BUILD_DIR)/App.xcarchive \
+               CODE_SIGN_STYLE="Manual" \
+               PROVISIONING_PROFILE_SPECIFIER="$(PROVISIONING_PROFILE_NAME)" \
+               CODE_SIGN_IDENTITY="Apple Distribution" \
+               DEVELOPMENT_TEAM="$(TEAM_ID)"\
+               archive
+
+    xcodebuild -exportArchive \
+               -archivePath $(BUILD_DIR)/App.xcarchive \
+               -exportOptionsPlist ExportOptions.plist \
+               -exportPath $(BUILD_DIR)/ipa
+  displayName: 'Archive and Generate IPA'
+  env:
+    TEAM_ID: $(TEAM_ID)
+    PROVISIONING_PROFILE_NAME: $(PROVISIONING_PROFILE_NAME)
+
+- script: |
+    # Grant execution permission to generate_hash script
+    HASH_SCRIPT_PATH="$(Build.SourcesDirectory)/ios/App/AppSealingSDK/Tools/generate_hash"
+
+    echo "Granting execution permission to generate_hash..."
+    chmod +x "$HASH_SCRIPT_PATH"
+
+    echo "Running generate_hash with IPA... $IPA_PATH"
+    "$HASH_SCRIPT_PATH" "$(IPA_PATH)"
+  displayName: 'Run generate_hash on IPA'
+
+# 7. TestFlight upload (using App-Specific Password)
+- script: |
+    xcrun altool --upload-app -f "$IPA_PATH" -t ios -u "$APPLE_ID" -p "$APP_SPECIFIC_PASSWORD"
+  displayName: 'Upload to TestFlight'
+  env:
+    APPLE_ID: $(APPLE_ID)
+    APP_SPECIFIC_PASSWORD: $(APP_SPECIFIC_PASSWORD)
